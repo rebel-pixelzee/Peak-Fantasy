@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Peak Fantasy Control Studio</title>
+<style>
+:root{--bg:#0b1020;--panel:#141d32;--panel2:#1b2943;--line:#2b3b59;--txt:#edf3ff;--muted:#9eacc5;--accent:#72e0c1;--warn:#ffcc75}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1020,#101b30);color:var(--txt);font:15px system-ui,Arial}
+header{padding:22px max(18px,calc((100% - 1100px)/2));border-bottom:1px solid var(--line);background:#0b1020dd;position:sticky;top:0;z-index:2}
+h1{font-size:22px;margin:0 0 5px}header p{margin:0;color:var(--muted);font-size:13px}
+main{max-width:1100px;margin:22px auto;padding:0 16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.row>*{flex:1;min-width:170px}
+button,.btn{background:var(--accent);color:#07151b;border:0;border-radius:10px;padding:11px 15px;font-weight:700;cursor:pointer}
+button.secondary{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+button:disabled{opacity:.4;cursor:not-allowed}
+input,select{width:100%;padding:11px;border-radius:9px;border:1px solid var(--line);background:#0c1527;color:var(--txt)}
+label{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}
+.status{padding:12px;border-radius:10px;background:#0c1527;color:var(--muted);margin-top:12px;white-space:pre-wrap}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.stat{background:#0c1527;border:1px solid var(--line);border-radius:12px;padding:13px}.stat b{display:block;font-size:22px}.stat span{font-size:12px;color:var(--muted)}
+.tablewrap{overflow:auto;max-height:58vh;border:1px solid var(--line);border-radius:10px;margin-top:12px}
+table{border-collapse:collapse;min-width:100%;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;white-space:nowrap}th{position:sticky;top:0;background:#1b2943;z-index:1}td input{min-width:100px;padding:7px}
+.small{font-size:12px;color:var(--muted)}.warn{color:var(--warn)}.hide{display:none}
+</style>
+</head>
+<body>
+<header><h1>⚡ Peak Fantasy Control Studio</h1><p>Online-ready database editor · connect to Supabase to load and publish Bag.db</p></header>
+<main>
+<section class="card">
+<h2>☁️ Online connection</h2>
+<p class="small">Enter your Supabase Project URL and Publishable Key, then sign in with your existing admin account. The key is stored only in this browser tab.</p>
+<div class="row"><div><label>Supabase Project URL</label><input id="sbUrl" placeholder="https://your-project.supabase.co"></div><div><label>Supabase Publishable Key</label><input id="sbKey" type="password" placeholder="sb_publishable_..."></div></div>
+<div class="row" style="margin-top:10px"><div><label>Admin email</label><input id="sbEmail" type="email" placeholder="admin email"></div><div><label>Admin password</label><input id="sbPassword" type="password" placeholder="password"></div></div>
+<div class="row" style="margin-top:10px"><button id="connectBtn">Connect & sign in</button><button class="secondary" id="onlineLoadBtn" disabled>Load online Bag.db</button><button class="secondary" id="onlinePublishBtn" disabled>Publish Bag.db</button></div>
+<div id="onlineStatus" class="status">Not connected. Bucket expected: Game-update · file: Bag.db</div>
+<p class="small warn">Use only the Supabase Publishable Key, never a secret/service_role key. Publishing replaces the Bag.db object in Storage; it does not automatically update a running game. Your game updater must download this object for players to receive it.</p>
+</section>
+<section class="card">
+<h2>1. Load game update ZIP</h2>
+<p class="small">Choose the original update ZIP containing <b>MonRes/Bag.db</b>. Processing happens in this browser tab.</p>
+<div class="row"><input id="zipFile" type="file" accept=".zip"><button id="loadBtn">Load ZIP & database</button></div>
+<div id="status" class="status">Waiting for ZIP…</div>
+</section>
+<section id="overview" class="card hide">
+<h2>Database overview</h2><div class="stats" id="stats"></div>
+<p class="small warn">Important: This edits database records only. Whether an event, ability, server setting or reward works in-game depends on the game's code and backend support. This tool does not modify server-side services.</p>
+</section>
+
+<section id="eventManager" class="card hide">
+<h2>🎉 Event Manager</h2>
+<p class="small">Dedicated editor for the event-related fields found in your supplied Bag.db. Changes stay local until you export a new ZIP.</p>
+<h3>Event drop configuration · h_event</h3>
+<div id="eventFields" class="row"></div>
+<button id="saveEvent" style="margin-top:12px">Save event configuration</button>
+<hr style="border-color:var(--line);margin:20px 0">
+<h3>Activity requirements · t_active</h3>
+<p class="small">Edit each activity row's times, diamond requirement and VIP limit.</p>
+<div class="tablewrap"><table id="activeTable"></table></div>
+<button id="saveActive" style="margin-top:12px">Save activity settings</button>
+<div id="eventStatus" class="status">Event manager ready after loading ZIP.</div>
+<p class="small warn">This database contains drop probabilities/items and activity requirements, but no event start/end dates or enable/disable flag in these tables. Scheduling and live activation may require a separate server configuration.</p>
+</section>
+<section id="editor" class="card hide">
+<h2>2. Browse and edit tables</h2>
+<div class="row">
+<div><label>Table</label><select id="tableSelect"></select></div>
+<div><label>Search rows (matches visible text)</label><input id="search" placeholder="Search name, ID, text…"></div>
+<div style="flex:0 0 150px"><label>Rows per page</label><select id="pageSize"><option>25</option><option>50</option><option>100</option></select></div>
+</div>
+<div class="row" style="margin-top:12px"><button class="secondary" id="prev">← Previous</button><span id="pageInfo" class="small">Page 1</span><button class="secondary" id="next">Next →</button><button id="saveRow">Save edits to database</button></div>
+<div class="tablewrap"><table id="dataTable"></table></div>
+<div class="small" style="margin-top:10px">Edit cell values directly. Save edits before switching tables or exporting. Existing data is not changed until you export a new ZIP.</div>
+</section>
+<section id="export" class="card hide">
+<h2>3. Export update package</h2>
+<p class="small">Creates a new ZIP with the edited <b>MonRes/Bag.db</b> and all other original files preserved.</p>
+<div class="row"><button id="exportBtn">Export updated ZIP</button><button class="secondary" id="dbBtn">Export Bag.db only</button></div>
+<div id="exportStatus" class="status">No export yet.</div>
+</section>
+<section class="card">
+<h2>Table guide</h2>
+<div class="small">
+<b>Pokémon:</b> t_pet, t_pet_characteristic, t_pet_character, t_pet_level<br>
+<b>Moves:</b> t_skill, t_buff, t_need_skill<br>
+<b>Events / activities:</b> h_event, t_active, t_adventure, t_trial<br>
+<b>Rewards:</b> function_reward, t_boss_reward, t_online_gift, t_master_reward<br>
+<b>Shop:</b> t_store, t_store_goods<br><br>
+The table names are taken from the supplied Bag.db. Always keep a backup and test changes in a separate game build first.
+</div>
+</section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<script>
+let SQL, db, zip, dbBytes, currentTable='', page=0, dirty=false, rows=[], cols=[];
+const $=id=>document.getElementById(id);
+function status(s){$('status').textContent=s}
+async function initSql(){if(SQL)return SQL;SQL=await initSqlJs({locateFile:f=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/'+f});return SQL}
+$('loadBtn').onclick=async()=>{
+ try{
+  const f=$('zipFile').files[0]; if(!f)throw Error('Select the original update ZIP first.');
+  status('Reading ZIP…'); await initSql(); zip=await JSZip.loadAsync(f);
+  const entry=zip.file('MonRes/Bag.db'); if(!entry)throw Error('ZIP does not contain MonRes/Bag.db');
+  dbBytes=await entry.async('uint8array'); db=new SQL.Database(dbBytes);
+  const tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")[0].values.map(x=>x[0]);
+  if(!tables.length)throw Error('No SQLite tables found.');
+  $('overview').classList.remove('hide');$('editor').classList.remove('hide');$('export').classList.remove('hide');
+  $('stats').innerHTML=`<div class="stat"><b>${tables.length}</b><span>Tables</span></div><div class="stat"><b>${(dbBytes.length/1048576).toFixed(2)} MB</b><span>Bag.db size</span></div><div class="stat"><b>${Object.keys(zip.files).length}</b><span>ZIP entries</span></div>`;
+  $('tableSelect').innerHTML=tables.map(t=>`<option>${t}</option>`).join('');
+  $('tableSelect').value=tables.includes('t_pet')?'t_pet':tables[0]; currentTable='';loadTable();initEventManager();
+  status('Loaded successfully. Original ZIP is unchanged.'); dirty=false;
+ }catch(e){status('Error: '+e.message)}
+};
+function loadTable(){
+ currentTable=$('tableSelect').value;page=0;
+ const res=db.exec('SELECT * FROM "'+currentTable.replaceAll('"','""')+'"');
+ cols=res[0]?.columns||[]; rows=res[0]?.values||[]; render();
+}
+function render(){
+ const q=$('search').value.toLowerCase(), filtered=rows.map((r,i)=>({r,i})).filter(x=>x.r.some(v=>String(v??'').toLowerCase().includes(q)));
+ const size=+$('pageSize').value, pages=Math.max(1,Math.ceil(filtered.length/size));page=Math.min(page,pages-1);
+ const slice=filtered.slice(page*size,(page+1)*size);
+ $('pageInfo').textContent=`Page ${page+1}/${pages} · ${filtered.length} rows`;
+ let h='<thead><tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr></thead><tbody>';
+ for(const x of slice){h+='<tr>'+x.r.map((v,j)=>`<td><input data-row="${x.i}" data-col="${j}" value="${esc(String(v??''))}"></td>`).join('')+'</tr>'}
+ $('dataTable').innerHTML=h+'</tbody>';
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('tableSelect').onchange=loadTable;$('search').oninput=render;$('pageSize').onchange=render;
+$('prev').onclick=()=>{page=Math.max(0,page-1);render()};$('next').onclick=()=>{page++;render()};
+$('saveRow').onclick=()=>{
+ try{
+  const inputs=[...$('dataTable').querySelectorAll('input[data-row]')];
+  const changes=new Map(); for(const el of inputs){const i=+el.dataset.row,j=+el.dataset.col;(changes.get(i)||changes.set(i,{}).get(i))[j]=el.value}
+  const info=db.exec('PRAGMA table_info("'+currentTable.replaceAll('"','""')+'")')[0].values;
+  const pk=info.findIndex(x=>x[5]===1);
+  if(pk<0)throw Error('This table has no single primary key; editing is disabled for safety.');
+  const keyName=cols[pk];
+  const stmt=db.prepare('UPDATE "'+currentTable.replaceAll('"','""')+'" SET '+cols.map((c,j)=>'"'+c.replaceAll('"','""')+'" = ?').join(',')+' WHERE "'+keyName.replaceAll('"','""')+'" = ?');
+  for(const [i,obj] of changes){const vals=rows[i].map((v,j)=>Object.prototype.hasOwnProperty.call(obj,j)?obj[j]:v);stmt.run([...vals,rows[i][pk]])}
+  stmt.free();dirty=true;loadTable();$('exportStatus').textContent='Edits saved in memory. Export a new ZIP to create a modified copy.';
+ }catch(e){alert('Could not save: '+e.message)}
+};
+$('exportBtn').onclick=async()=>{
+ try{if(!zip||!db)throw Error('Load a ZIP first.');$('exportStatus').textContent='Building ZIP…';
+ const out=db.export();zip.file('MonRes/Bag.db',out);const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+ download(blob,'Peak-Fantasy-update-edited.zip');$('exportStatus').textContent='Export complete. Original ZIP was not overwritten.';
+ }catch(e){$('exportStatus').textContent='Error: '+e.message}
+};
+$('dbBtn').onclick=()=>{if(!db)return;download(new Blob([db.export()],{type:'application/octet-stream'}),'Bag-edited.db')};
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)}
+
+function initEventManager(){
+ const ev=db.exec('SELECT * FROM h_event LIMIT 1')[0];
+ const fields=ev?.columns||[], vals=ev?.values?.[0]||[];
+ $('eventFields').innerHTML=fields.map((c,i)=>`<div><label>${esc(c)}</label><input id="ev_${i}" value="${esc(String(vals[i]??''))}"></div>`).join('');
+ const act=db.exec('SELECT rowid AS __rid, * FROM t_active ORDER BY rowid');
+ const acols=act?.columns||[], arows=act?.values||[];
+ $('activeTable').innerHTML='<thead><tr>'+acols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr></thead><tbody>'+
+ arows.map((r,ri)=>'<tr>'+r.map((v,ci)=>ci===0?`<td>${esc(String(v))}</td>`:`<td><input data-active-row="${ri}" data-active-col="${ci}" value="${esc(String(v??''))}"></td>`).join('')+'</tr>').join('')+'</tbody>';
+ $('eventManager').dataset.eventColumns=JSON.stringify(fields);
+ $('eventManager').dataset.activeRows=JSON.stringify(arows);
+}
+$('saveEvent').onclick=()=>{
+ try{
+  const fields=JSON.parse($('eventManager').dataset.eventColumns||'[]');
+  const vals=fields.map((_,i)=>$('ev_'+i).value);
+  const set=fields.slice(1).map(c=>'"'+c.replaceAll('"','""')+'" = ?').join(',');
+  db.run('UPDATE h_event SET '+set+' WHERE id = ?', [...vals.slice(1), vals[0]]);
+  dirty=true;$('eventStatus').textContent='h_event saved in working database. Export a new ZIP to keep changes.';
+ }catch(e){$('eventStatus').textContent='Save failed: '+e.message}
+};
+$('saveActive').onclick=()=>{
+ try{
+  const original=JSON.parse($('eventManager').dataset.activeRows||'[]');
+  const inputs=[...$('activeTable').querySelectorAll('input[data-active-row]')];
+  const changes=new Map();
+  for(const el of inputs){const r=+el.dataset.activeRow,c=+el.dataset.activeCol;(changes.get(r)||changes.set(r,{}).get(r))[c]=el.value}
+  const cols=['t_times','Diamonds','VIP_limit'];
+  const stmt=db.prepare('UPDATE t_active SET t_times=?, Diamonds=?, VIP_limit=? WHERE rowid=?');
+  for(const [r,change] of changes){const row=original[r];stmt.run([change[1]??row[1],change[2]??row[2],change[3]??row[3],row[0]])}
+  stmt.free();dirty=true;$('eventStatus').textContent='t_active saved in working database. Export a new ZIP to keep changes.';
+ }catch(e){$('eventStatus').textContent='Save failed: '+e.message}
+};
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+let sbClient=null;
+const onlineMsg=t=>document.getElementById('onlineStatus').textContent=t;
+document.getElementById('connectBtn').onclick=async()=>{
+ try{
+  const url=document.getElementById('sbUrl').value.trim(), key=document.getElementById('sbKey').value.trim();
+  const email=document.getElementById('sbEmail').value.trim(), password=document.getElementById('sbPassword').value;
+  if(!url||!key||!email||!password) throw Error('Project URL, publishable key, email and password are required.');
+  sbClient=window.supabase.createClient(url,key);
+  onlineMsg('Signing in…');
+  const {data,error}=await sbClient.auth.signInWithPassword({email,password}); if(error)throw error;
+  document.getElementById('onlineLoadBtn').disabled=false; document.getElementById('onlinePublishBtn').disabled=false;
+  onlineMsg('Connected as '+data.user.email+'. Ready to load or publish Bag.db.');
+ }catch(e){sbClient=null;onlineMsg('Connection failed: '+e.message)}
+};
+document.getElementById('onlineLoadBtn').onclick=async()=>{
+ try{
+  if(!sbClient)throw Error('Connect and sign in first.');
+  onlineMsg('Downloading Game-update/Bag.db…');
+  const {data,error}=await sbClient.storage.from('Game-update').download('Bag.db'); if(error)throw error;
+  const bytes=new Uint8Array(await data.arrayBuffer()); await initSql();
+  dbBytes=bytes; db=new SQL.Database(dbBytes); zip=null;
+  const result=db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")[0];
+  if(!result||!result.values.length)throw Error('Downloaded file is not a valid SQLite database.');
+  const tables=result.values.map(x=>x[0]);
+  document.getElementById('overview').classList.remove('hide');document.getElementById('editor').classList.remove('hide');document.getElementById('eventManager').classList.remove('hide');document.getElementById('export').classList.remove('hide');
+  document.getElementById('stats').innerHTML=`<div class="stat"><b>${tables.length}</b><span>Tables</span></div><div class="stat"><b>${(bytes.length/1048576).toFixed(2)} MB</b><span>Bag.db size</span></div><div class="stat"><b>Online</b><span>Source</span></div>`;
+  document.getElementById('tableSelect').innerHTML=tables.map(t=>`<option>${esc(t)}</option>`).join('');
+  document.getElementById('tableSelect').value=tables.includes('t_pet')?'t_pet':tables[0]; currentTable='';loadTable();initEventManager();dirty=false;
+  status('Loaded Bag.db from Supabase Storage.'); onlineMsg('Online Bag.db loaded successfully.');
+ }catch(e){onlineMsg('Load failed: '+e.message)}
+};
+document.getElementById('onlinePublishBtn').onclick=async()=>{
+ try{
+  if(!sbClient||!db)throw Error('Connect and load a database first.');
+  if(!confirm('Replace Game-update/Bag.db in Supabase Storage with the edited database? Keep a backup first.'))return;
+  onlineMsg('Uploading edited Bag.db…');
+  const bytes=db.export();
+  const {error}=await sbClient.storage.from('Game-update').upload('Bag.db',new Blob([bytes],{type:'application/octet-stream'}),{upsert:true,contentType:'application/octet-stream'});
+  if(error)throw error;
+  dbBytes=bytes;dirty=false;onlineMsg('Published Bag.db to Supabase Storage. Game clients receive it only if their updater is configured to download this file.');
+ }catch(e){onlineMsg('Publish failed: '+e.message)}
+};
+</script>
+
+</body></html>
